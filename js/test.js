@@ -1,5 +1,5 @@
 //document.getElementById("test").innerHTML = 5 + 6;
-
+console.log("hello from test.js");
 if (localStorage && !localStorage.getItem('size')) {
   console.log("testing local storage from test.js");
     var i = 0;
