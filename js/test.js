@@ -7,7 +7,7 @@ if (true) {//localStorage && !localStorage.getItem('size')) {
         // Test up to 10 MB
         for (i = 250; i <= 10000; i += 250) {
             localStorage.setItem('test', new Array((i * 1024) + 1).join('a'));
-            console.log("reached "+str(i)+" MB of local storage");
+            console.log("reached "+String(i)+" MB of local storage");
         }
     } catch (e) {
         console.log("exception: "+String(e));
