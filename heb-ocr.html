@@ -17,11 +17,20 @@
             max-height: 400px;
             overflow-y: scroll;
         }
-        #fileInput {
+        #fileInput, #urlInput, #processButton {
             margin: 10px 0;
         }
-        #urlInput {
-            margin: 10px 0;
+        #processButton {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #processButton:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -35,7 +44,11 @@
 
     <label for="urlInput">Or provide a URL (for PDF or image)</label>
     <input type="text" id="urlInput" placeholder="Enter file URL" />
-    <button id="urlButton">Process URL</button>
+    
+    <br>
+    
+    <!-- Process button (initially disabled) -->
+    <button id="processButton" disabled>Process</button>
 
     <div id="output"></div>
     
@@ -45,26 +58,44 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
     
     <script>
-        // Global variables for OCR processing
-        let ocrText = '';
+        let ocrText = '';  // Global variable to store OCR text
         let currentPage = 1;
         let numPages = 0;
-
-        // Handle file input or URL input
+        let selectedFile = null;  // Holds the uploaded file or URL input
+        
+        // Handle file input
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
-            if (file) {
-                processPDF(file);
-            }
+            selectedFile = file;
+            enableProcessButton();
         });
 
-        document.getElementById('urlButton').addEventListener('click', function() {
+        // Handle URL input
+        document.getElementById('urlInput').addEventListener('input', function() {
             const url = document.getElementById('urlInput').value;
-            if (url) {
-                fetch(url)
+            selectedFile = url;
+            enableProcessButton();
+        });
+
+        // Enable or disable the Process button based on whether a file is selected or URL is provided
+        function enableProcessButton() {
+            const processButton = document.getElementById('processButton');
+            if (selectedFile) {
+                processButton.disabled = false;  // Enable the button
+            } else {
+                processButton.disabled = true;  // Disable the button if no file or URL
+            }
+        }
+
+        // Handle the Process button click
+        document.getElementById('processButton').addEventListener('click', function() {
+            if (selectedFile instanceof File) {
+                processPDF(selectedFile);
+            } else if (typeof selectedFile === 'string' && selectedFile) {
+                fetch(selectedFile)
                     .then(response => response.blob())
                     .then(blob => {
-                        const file = new File([blob], url.split('/').pop(), { type: blob.type });
+                        const file = new File([blob], selectedFile.split('/').pop(), { type: blob.type });
                         processPDF(file);
                     })
                     .catch(err => {
@@ -74,7 +105,7 @@
             }
         });
 
-        // Process PDF file
+        // Function to process the selected PDF
         function processPDF(file) {
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -101,34 +132,40 @@
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
 
+                // Render the page to canvas
                 page.render({
                     canvasContext: context,
                     viewport: viewport
                 }).promise.then(function() {
+                    // Perform OCR on the rendered canvas
                     performOCR(canvas, pageNumber);
                 });
             });
         }
 
-        // Perform OCR on a page of the PDF (using Tesseract.js)
+        // Perform OCR on the current page using Tesseract.js
         function performOCR(canvas, pageNumber) {
             Tesseract.recognize(
                 canvas,
                 'heb',  // Hebrew language
                 {
-                    logger: (m) => console.log(m)
+                    logger: (m) => console.log(m)  // Log OCR progress
                 }
             ).then(({ data: { text } }) => {
+                // Append the text for the current page
                 ocrText += text + '\n--- End of Page ' + pageNumber + ' ---\n';
-                document.getElementById('output').textContent = ocrText;  // Display OCR result
+                document.getElementById('output').textContent = ocrText;  // Update output in real-time
 
-                // Proceed to the next page or finish processing
+                // Process the next page or finish
                 if (pageNumber < numPages) {
                     currentPage++;
                     processPage(pdf, currentPage);
                 } else {
-                    document.getElementById('downloadButton').style.display = 'inline-block';  // Show download button
+                    // Show the download button after processing is complete
+                    document.getElementById('downloadButton').style.display = 'inline-block';
                 }
+            }).catch(err => {
+                console.error("OCR Error on page " + pageNumber, err);
             });
         }
 
