@@ -32,6 +32,25 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
+        #spinner {
+            display: none;
+            margin-top: 20px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #errorMessage {
+            color: red;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -50,9 +69,13 @@
     <!-- Process button (initially disabled) -->
     <button id="processButton" disabled>Process</button>
 
+    <div id="spinner"></div> <!-- Spinner -->
+
     <div id="output"></div>
     
     <button id="downloadButton" style="display:none;">Download OCR Output (.txt)</button>
+
+    <div id="errorMessage"></div> <!-- Error message -->
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
@@ -89,6 +112,8 @@
 
         // Handle the Process button click
         document.getElementById('processButton').addEventListener('click', function() {
+            showSpinner(true);
+            clearErrorMessage();
             if (selectedFile instanceof File) {
                 processPDF(selectedFile);
             } else if (typeof selectedFile === 'string' && selectedFile) {
@@ -99,7 +124,8 @@
                         processPDF(file);
                     })
                     .catch(err => {
-                        alert('Error loading the file from URL');
+                        showSpinner(false);
+                        showErrorMessage('Error loading the file from URL');
                         console.error(err);
                     });
             }
@@ -117,6 +143,10 @@
                     ocrText = '';  // Reset OCR text
                     currentPage = 1;
                     processPage(pdf, currentPage);
+                }).catch(err => {
+                    showSpinner(false);
+                    showErrorMessage('Error loading PDF document');
+                    console.error(err);
                 });
             };
             reader.readAsArrayBuffer(file);
@@ -139,7 +169,15 @@
                 }).promise.then(function() {
                     // Perform OCR on the rendered canvas
                     performOCR(canvas, pageNumber);
+                }).catch(err => {
+                    showSpinner(false);
+                    showErrorMessage('Error rendering page to canvas');
+                    console.error(err);
                 });
+            }).catch(err => {
+                showSpinner(false);
+                showErrorMessage('Error processing page ' + pageNumber);
+                console.error(err);
             });
         }
 
@@ -162,9 +200,12 @@
                     processPage(pdf, currentPage);
                 } else {
                     // Show the download button after processing is complete
+                    showSpinner(false);
                     document.getElementById('downloadButton').style.display = 'inline-block';
                 }
             }).catch(err => {
+                showSpinner(false);
+                showErrorMessage('OCR Error on page ' + pageNumber);
                 console.error("OCR Error on page " + pageNumber, err);
             });
         }
@@ -177,6 +218,25 @@
             link.download = 'ocr_output.txt';
             link.click();
         });
+
+        // Show or hide the spinner
+        function showSpinner(visible) {
+            const spinner = document.getElementById('spinner');
+            spinner.style.display = visible ? 'block' : 'none';
+        }
+
+        // Display error message
+        function showErrorMessage(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.style.display = 'block';
+            errorMessage.textContent = message;
+        }
+
+        // Clear the error message
+        function clearErrorMessage() {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.style.display = 'none';
+        }
     </script>
 </body>
 </html>
