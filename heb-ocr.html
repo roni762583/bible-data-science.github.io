@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hebrew OCR from PDF or Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 20px;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: scroll;
+        }
+        #fileInput {
+            margin: 10px 0;
+        }
+        #urlInput {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>OCR Hebrew PDF or Image</h1>
+
+    <label for="fileInput">Upload PDF or Image File</label>
+    <input type="file" id="fileInput" accept="application/pdf, image/*" />
+    
+    <br>
+
+    <label for="urlInput">Or provide a URL (for PDF or image)</label>
+    <input type="text" id="urlInput" placeholder="Enter file URL" />
+    <button id="urlButton">Process URL</button>
+
+    <div id="output"></div>
+    
+    <button id="downloadButton" style="display:none;">Download OCR Output (.txt)</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
+    
+    <script>
+        // Global variables for OCR processing
+        let ocrText = '';
+        let currentPage = 1;
+        let numPages = 0;
+
+        // Handle file input or URL input
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processPDF(file);
+            }
+        });
+
+        document.getElementById('urlButton').addEventListener('click', function() {
+            const url = document.getElementById('urlInput').value;
+            if (url) {
+                fetch(url)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const file = new File([blob], url.split('/').pop(), { type: blob.type });
+                        processPDF(file);
+                    })
+                    .catch(err => {
+                        alert('Error loading the file from URL');
+                        console.error(err);
+                    });
+            }
+        });
+
+        // Process PDF file
+        function processPDF(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const pdfData = new Uint8Array(e.target.result);
+                
+                // Load PDF using PDF.js
+                pdfjsLib.getDocument(pdfData).promise.then(function(pdf) {
+                    numPages = pdf.numPages;
+                    ocrText = '';  // Reset OCR text
+                    currentPage = 1;
+                    processPage(pdf, currentPage);
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Process a specific page of the PDF
+        function processPage(pdf, pageNumber) {
+            pdf.getPage(pageNumber).then(function(page) {
+                const scale = 1.5;
+                const viewport = page.getViewport({ scale: scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise.then(function() {
+                    performOCR(canvas, pageNumber);
+                });
+            });
+        }
+
+        // Perform OCR on a page of the PDF (using Tesseract.js)
+        function performOCR(canvas, pageNumber) {
+            Tesseract.recognize(
+                canvas,
+                'heb',  // Hebrew language
+                {
+                    logger: (m) => console.log(m)
+                }
+            ).then(({ data: { text } }) => {
+                ocrText += text + '\n--- End of Page ' + pageNumber + ' ---\n';
+                document.getElementById('output').textContent = ocrText;  // Display OCR result
+
+                // Proceed to the next page or finish processing
+                if (pageNumber < numPages) {
+                    currentPage++;
+                    processPage(pdf, currentPage);
+                } else {
+                    document.getElementById('downloadButton').style.display = 'inline-block';  // Show download button
+                }
+            });
+        }
+
+        // Save OCR text as a .txt file
+        document.getElementById('downloadButton').addEventListener('click', function() {
+            const blob = new Blob([ocrText], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'ocr_output.txt';
+            link.click();
+        });
+    </script>
+</body>
+</html>
