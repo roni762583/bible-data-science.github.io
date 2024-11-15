@@ -51,6 +51,10 @@
             margin-top: 10px;
             display: none;
         }
+        #progressMessage {
+            font-size: 14px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -76,6 +80,7 @@
     <button id="downloadButton" style="display:none;">Download OCR Output (.txt)</button>
 
     <div id="errorMessage"></div> <!-- Error message -->
+    <div id="progressMessage"></div> <!-- Progress Message -->
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
@@ -114,6 +119,7 @@
         document.getElementById('processButton').addEventListener('click', function() {
             showSpinner(true);
             clearErrorMessage();
+            clearProgressMessage();
             if (selectedFile instanceof File) {
                 processPDF(selectedFile);
             } else if (typeof selectedFile === 'string' && selectedFile) {
@@ -187,7 +193,11 @@
                 canvas,
                 'heb',  // Hebrew language
                 {
-                    logger: (m) => console.log(m)  // Log OCR progress
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            updateProgressMessage(`Recognizing text... ${Math.round(m.progress * 100)}%`);
+                        }
+                    }  // Log OCR progress
                 }
             ).then(({ data: { text } }) => {
                 // Append the text for the current page
@@ -236,6 +246,18 @@
         function clearErrorMessage() {
             const errorMessage = document.getElementById('errorMessage');
             errorMessage.style.display = 'none';
+        }
+
+        // Update the progress message during OCR
+        function updateProgressMessage(message) {
+            const progressMessage = document.getElementById('progressMessage');
+            progressMessage.textContent = message;
+        }
+
+        // Clear the progress message
+        function clearProgressMessage() {
+            const progressMessage = document.getElementById('progressMessage');
+            progressMessage.textContent = '';
         }
     </script>
 </body>
