@@ -1,38 +1,150 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <link rel="icon" type="image/png" href="img/BibleDataScienceGroup.png">
-  <!-- Add icon library -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-
-  <style>
-    img {
-      float: left;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hebrew OCR from PDF or Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 20px;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: scroll;
+        }
+        #fileInput {
+            margin: 10px 0;
+        }
+        #urlInput {
+            margin: 10px 0;
+        }
+    </style>
 </head>
-
 <body>
-    
-  <div>
-    <img src="img/BibleDataScienceGroup.png" alt="logo" style="width:200px;height:200px;margin-right:15px;margin-bottom:15px">
-    <h1>Bible Data Science</h1>
-    <p>This <a href="https://roni762583.github.io/bible-data-science.github.io/">Bible Data Science page</a> is concerned with data science as it relates to the bible. Using the bible as a dataset, and using data science techniques in the study and sharing bible related data science material.</p>
-      <p>
-          <a href="https://github.com/roni762583/bible-data-science.github.io" target="_blank">GitHub Repository</a>
-      </p>
-      
-  </div>
-    <div id="links">
-        <ul>
-            <li><a href="https://colab.research.google.com/github/roni762583/bible-data-science.github.io/blob/master/CleanBible.ipynb">Bible Text cleaning operations colab notebook</a></li>
-            <li><a href="https://bible-codes.github.io/" target="_blank">Bible Code App</a></li>
-            <li><a href="https://colab.research.google.com/github/roni762583/bible-data-science.github.io/blob/master/anagram.ipynb">Anagram operations colab notebook</a></li>
-            <li><a href="igeret.html" target="_blank">Igeret Ramban (A letter from Ramban to his son) - Multilingual with audio</a></li>
-            <li><a href="qa.html" target="_blank">Questions and some answers</a></li>
-        </ul> 
-    </div>
-</body>
+    <h1>OCR Hebrew PDF or Image</h1>
 
+    <label for="fileInput">Upload PDF or Image File</label>
+    <input type="file" id="fileInput" accept="application/pdf, image/*" />
+    
+    <br>
+
+    <label for="urlInput">Or provide a URL (for PDF or image)</label>
+    <input type="text" id="urlInput" placeholder="Enter file URL" />
+    <button id="urlButton">Process URL</button>
+
+    <div id="output"></div>
+    
+    <button id="downloadButton" style="display:none;">Download OCR Output (.txt)</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
+    
+    <script>
+        let ocrText = '';  // Global variable to store OCR text
+        let currentPage = 1;
+        let numPages = 0;
+        
+        // Handle file input or URL input
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processPDF(file);
+            }
+        });
+
+        document.getElementById('urlButton').addEventListener('click', function() {
+            const url = document.getElementById('urlInput').value;
+            if (url) {
+                fetch(url)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        const file = new File([blob], url.split('/').pop(), { type: blob.type });
+                        processPDF(file);
+                    })
+                    .catch(err => {
+                        alert('Error loading the file from URL');
+                        console.error(err);
+                    });
+            }
+        });
+
+        // Function to process the selected PDF
+        function processPDF(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const pdfData = new Uint8Array(e.target.result);
+                
+                // Load PDF using PDF.js
+                pdfjsLib.getDocument(pdfData).promise.then(function(pdf) {
+                    numPages = pdf.numPages;
+                    ocrText = '';  // Reset OCR text
+                    currentPage = 1;
+                    processPage(pdf, currentPage);
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Process a specific page of the PDF
+        function processPage(pdf, pageNumber) {
+            pdf.getPage(pageNumber).then(function(page) {
+                const scale = 1.5;
+                const viewport = page.getViewport({ scale: scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                // Render the page to canvas
+                page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise.then(function() {
+                    // Perform OCR on the rendered canvas
+                    performOCR(canvas, pageNumber);
+                });
+            });
+        }
+
+        // Perform OCR on the current page using Tesseract.js
+        function performOCR(canvas, pageNumber) {
+            Tesseract.recognize(
+                canvas,
+                'heb',  // Hebrew language
+                {
+                    logger: (m) => console.log(m)  // Log OCR progress
+                }
+            ).then(({ data: { text } }) => {
+                // Append the text for the current page
+                ocrText += text + '\n--- End of Page ' + pageNumber + ' ---\n';
+                document.getElementById('output').textContent = ocrText;  // Update output in real-time
+
+                // Process the next page or finish
+                if (pageNumber < numPages) {
+                    currentPage++;
+                    processPage(pdf, currentPage);
+                } else {
+                    // Show the download button after processing is complete
+                    document.getElementById('downloadButton').style.display = 'inline-block';
+                }
+            }).catch(err => {
+                console.error("OCR Error on page " + pageNumber, err);
+            });
+        }
+
+        // Save OCR text as a .txt file
+        document.getElementById('downloadButton').addEventListener('click', function() {
+            const blob = new Blob([ocrText], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'ocr_output.txt';
+            link.click();
+        });
+    </script>
+</body>
 </html>
